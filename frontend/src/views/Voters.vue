@@ -47,7 +47,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../axios'
 
 const voters = ref([])
 const fileInput = ref(null)
@@ -56,7 +56,7 @@ const isUploadSuccess = ref(true)
 
 const fetchVoters = async () => {
     try {
-        const response = await axios.get('http://127.0.0.1:8000/api/voters/')
+        const response = await api.get('voters/')
         voters.value = response.data
     } catch (error) {
         console.error('Error fetching voters:', error)
@@ -75,7 +75,7 @@ const handleFileUpload = async (event) => {
     formData.append('file', file)
 
     try {
-        const response = await axios.post('http://127.0.0.1:8000/api/voters/import/', formData, {
+        const response = await api.post('voters/import/', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         })
         isUploadSuccess.value = true

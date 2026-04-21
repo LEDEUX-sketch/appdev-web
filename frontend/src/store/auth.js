@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import api from '../axios'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: null,
+    token: localStorage.getItem('token') || null,
     user: null,
   }),
   getters: {
@@ -12,13 +12,12 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async login(username, password) {
       try {
-        const response = await axios.post('http://127.0.0.1:8000/api/auth/login/', {
+        const response = await api.post('auth/login/', {
           username,
           password
         })
         this.token = response.data.access
-        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-        // In a real app we would decode JWT to get user info, or fetch profile
+        localStorage.setItem('token', this.token)
         this.user = { username } 
         return true
       } catch (error) {
@@ -29,7 +28,7 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.token = null
       this.user = null
-      delete axios.defaults.headers.common['Authorization']
+      localStorage.removeItem('token')
     }
   }
 })

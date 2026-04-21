@@ -34,14 +34,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../axios'
 
 const elections = ref([])
 const showModal = ref(false)
 
 const fetchElections = async () => {
     try {
-        const response = await axios.get('http://127.0.0.1:8000/api/elections/')
+        const response = await api.get('elections/')
         elections.value = response.data
     } catch (error) {
         console.error('Error fetching elections:', error)
