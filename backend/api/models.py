@@ -12,6 +12,26 @@ class Election(models.Model):
     end_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
 
+    @property
+    def calculated_status(self):
+        from django.utils import timezone
+        now = timezone.now()
+        
+        # If it's a draft, it's always a draft
+        if self.status == 'DRAFT':
+            return 'DRAFT'
+            
+        # If it's manually completed OR the time has passed, it's completed
+        if self.status == 'COMPLETED' or now > self.end_date:
+            return 'COMPLETED'
+            
+        # If the time hasn't reached the start date, it's upcoming
+        if now < self.start_date:
+            return 'UPCOMING'
+            
+        # Otherwise, it's active
+        return 'ACTIVE'
+
     def __str__(self):
         return self.title
 

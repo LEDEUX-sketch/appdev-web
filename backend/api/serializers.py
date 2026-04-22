@@ -4,9 +4,11 @@ from .models import Election, Position, Partylist, Candidate, Voter, VoteRecord
 class ElectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Election
-        fields = '__all__'
+        fields = ['id', 'title', 'start_date', 'end_date', 'status', 'calculated_status']
 
 class PositionSerializer(serializers.ModelSerializer):
+    election_title = serializers.CharField(source='election.title', read_only=True)
+    
     class Meta:
         model = Position
         fields = '__all__'
@@ -27,8 +29,8 @@ class CandidateSerializer(serializers.ModelSerializer):
 class VoterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voter
-        fields = ['id', 'student_id', 'name', 'email', 'has_voted']
-        # Note: Do not expose unique_voting_token directly in standard serializer
+        fields = ['id', 'student_id', 'name', 'email', 'has_voted', 'unique_voting_token']
+        # Note: Exposed to frontend for admin printable voter cards.
 
 class VoteRecordSerializer(serializers.ModelSerializer):
     class Meta:

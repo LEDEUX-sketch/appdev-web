@@ -1,4 +1,5 @@
 import csv
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -72,11 +73,44 @@ class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from django.db.models.functions import TruncHour
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        now = timezone.now()
+        
+        # Turnout progression (votes per hour for the last 24 hours)
+        turnout_data = []
+        try:
+            last_24h = now - timezone.timedelta(hours=24)
+            progression = VoteRecord.objects.filter(timestamp__gte=last_24h) \
+                .annotate(hour=TruncHour('timestamp')) \
+                .values('hour') \
+                .annotate(count=Count('id')) \
+                .order_by('hour')
+
+            for p in progression:
+                hour_val = p.get('hour')
+                label = '??'
+                if hour_val:
+                    if hasattr(hour_val, 'strftime'):
+                        label = hour_val.strftime('%I %p')
+                    else:
+                        label = str(hour_val)
+                turnout_data.append({'label': label, 'value': p.get('count', 0)})
+        except Exception as e:
+            print(f"Error calculating turnout progression: {e}")
+            turnout_data = []
+
         stats = {
-            'active_elections': Election.objects.filter(status='ACTIVE').count(),
+            'active_elections': Election.objects.filter(
+                ~Q(status='DRAFT'),
+                start_date__lte=now,
+                end_date__gte=now
+            ).count(),
             'total_candidates': Candidate.objects.count(),
             'total_voters': Voter.objects.count(),
             'total_votes': VoteRecord.objects.count(),
+            'turnout_progression': turnout_data
         }
         return Response(stats)
 
@@ -93,7 +127,7 @@ class VoterLoginView(APIView):
         try:
             voter = Voter.objects.get(student_id=student_id, unique_voting_token=token)
             if voter.has_voted:
-                return Response({'error': 'You have already cast your vote'}, status=status.HTTP_403_FORBIDDEN)
+                return Response({'error': 'You already casted a vote'}, status=status.HTTP_403_FORBIDDEN)
             
             serializer = VoterSerializer(voter)
             return Response(serializer.data)
@@ -101,9 +135,17 @@ class VoterLoginView(APIView):
             return Response({'error': 'Invalid Student ID or Token'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class ActiveElectionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Election.objects.filter(status='ACTIVE')
     serializer_class = ElectionSerializer
-    permission_classes = [] # In a real app, use token-based auth for voters
+    permission_classes = [] 
+
+    def get_queryset(self):
+        from django.utils import timezone
+        now = timezone.now()
+        return Election.objects.filter(
+            ~Q(status__in=['DRAFT', 'COMPLETED']),
+            start_date__lte=now,
+            end_date__gte=now
+        )
 
     @action(detail=True, methods=['GET'])
     def ballot(self, request, pk=None):
@@ -133,7 +175,20 @@ class BallotSubmissionView(APIView):
             if voter.has_voted:
                 return Response({'error': 'Vote already cast'}, status=status.HTTP_403_FORBIDDEN)
             
-            election = Election.objects.get(id=election_id, status='ACTIVE')
+            from django.utils import timezone
+            now = timezone.now()
+            
+            try:
+                election = Election.objects.get(id=election_id)
+            except Election.DoesNotExist:
+                return Response({'error': 'Election not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if election.status == 'DRAFT':
+                return Response({'error': 'This election is not yet published (Draft mode).'}, status=status.HTTP_400_BAD_REQUEST)
+            if election.status == 'COMPLETED' or now > election.end_date:
+                return Response({'error': 'Voting for this election has already ended.'}, status=status.HTTP_400_BAD_REQUEST)
+            if now < election.start_date:
+                return Response({'error': f'Voting has not started yet. Starts at {election.start_date.strftime("%Y-%m-%d %H:%M")}'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Create VoteRecords
             for candidate_id in selections:

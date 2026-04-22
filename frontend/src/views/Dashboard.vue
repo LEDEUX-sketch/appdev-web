@@ -1,8 +1,15 @@
 <template>
   <div class="dashboard-container animation-fade-in">
     <div class="header">
-      <h1>Election Dashboard</h1>
-      <p>System Overview & Current Metrics</p>
+      <div class="title-action-wrapper">
+        <div>
+          <h1>Election Dashboard</h1>
+          <p>System Overview & Current Metrics</p>
+        </div>
+        <button class="btn-sync" @click="fetchStats" :disabled="loading">
+          <span :class="{ 'spin': loading }">🔄</span> Sync Data
+        </button>
+      </div>
     </div>
 
     <div class="stats-grid">
@@ -27,6 +34,16 @@
         </div>
         <div class="chart-content">
           <p v-if="loading" class="text-muted">Analyzing voting patterns...</p>
+          <div v-else-if="stats.turnout_progression?.length > 0" class="turnout-chart">
+            <div v-for="point in stats.turnout_progression" :key="point.label" class="chart-bar-wrapper">
+              <div class="bar-container">
+                <div class="bar" :style="{ height: calculateBarHeight(point.value) }">
+                  <span class="bar-tooltip">{{ point.value }} votes</span>
+                </div>
+              </div>
+              <span class="bar-label">{{ point.label }}</span>
+            </div>
+          </div>
           <div v-else class="placeholder-chart">
             <div class="empty-state">
               <p>Voting data will appear here as the election progresses.</p>
@@ -63,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from '../axios';
 
 const stats = ref({
@@ -74,6 +91,7 @@ const stats = ref({
 });
 
 const loading = ref(true);
+let refreshInterval = null;
 
 const statItems = computed(() => [
   { title: 'Active Elections', value: stats.value.active_elections, color: '#3b82f6', icon: 'fas fa-poll' },
@@ -85,7 +103,7 @@ const statItems = computed(() => [
 const fetchStats = async () => {
   try {
     loading.value = true;
-    const response = await axios.get('/api/dashboard-stats/');
+    const response = await axios.get('dashboard-stats/');
     stats.value = response.data;
   } catch (error) {
     console.error('Failed to fetch dashboard stats:', error);
@@ -94,8 +112,21 @@ const fetchStats = async () => {
   }
 };
 
+const calculateBarHeight = (value) => {
+  if (!stats.value.turnout_progression || stats.value.turnout_progression.length === 0) return '0%';
+  const val = Number(value) || 0;
+  const max = Math.max(...stats.value.turnout_progression.map(p => Number(p.value) || 0), 10);
+  return `${(val / max) * 100}%`;
+};
+
 onMounted(() => {
   fetchStats();
+  // Auto-refresh every 60 seconds
+  refreshInterval = setInterval(fetchStats, 60000);
+});
+
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval);
 });
 </script>
 
@@ -118,6 +149,36 @@ onMounted(() => {
 .header p {
   color: #94a3b8;
   font-size: 16px;
+}
+.title-action-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.btn-sync {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+.btn-sync:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+}
+.btn-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.spin {
+  display: inline-block;
+  animation: rotate 2s linear infinite;
+}
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .stats-grid {
   display: grid;
@@ -226,6 +287,60 @@ onMounted(() => {
   0% { opacity: 1; }
   50% { opacity: 0.5; }
   100% { opacity: 1; }
+}
+
+/* Chart Styles */
+.turnout-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 250px;
+  padding-top: 20px;
+}
+.chart-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+}
+.bar-container {
+  flex: 1;
+  width: 30px;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.bar {
+  width: 100%;
+  background: linear-gradient(to top, var(--primary-color), #60a5fa);
+  border-radius: 4px;
+  position: relative;
+  transition: height 0.5s ease;
+}
+.bar:hover .bar-tooltip {
+  display: block;
+}
+.bar-tooltip {
+  display: none;
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 10;
+}
+.bar-label {
+  font-size: 11px;
+  color: #64748b;
 }
 
 .animation-fade-in {

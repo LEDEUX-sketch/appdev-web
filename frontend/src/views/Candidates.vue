@@ -6,7 +6,7 @@
         <p class="text-muted">Manage candidates, platforms, and partylists</p>
       </div>
       <div>
-        <button class="btn-primary" @click="showModal = true">+ Add Candidate</button>
+        <button class="btn-primary" @click="openCreateModal">+ Add Candidate</button>
       </div>
     </div>
 
@@ -28,8 +28,8 @@
           <p class="platform-text">"{{ candidate.platform_statement || 'No platform stated.' }}"</p>
         </div>
         <div class="candidate-actions">
-          <button class="btn-text">Edit</button>
-          <button class="btn-text text-danger">Delete</button>
+          <button class="btn-text" @click="openEditModal(candidate)">Edit</button>
+          <button class="btn-text text-danger" @click="deleteCandidate(candidate.id)">Delete</button>
         </div>
       </div>
     </div>
@@ -39,6 +39,47 @@
       <h3>No candidates available</h3>
       <p class="text-muted">Add your first candidate to populate the ballot.</p>
     </div>
+
+    <!-- Add/Edit Candidate Modal -->
+    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+      <div class="modal-content glass-panel">
+        <h2>{{ isEditing ? 'Edit Candidate' : 'Add New Candidate' }}</h2>
+        <form @submit.prevent="saveCandidate">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input v-model="newCandidate.name" type="text" class="input-glass" required />
+          </div>
+          <div class="form-group">
+            <label>Position</label>
+            <select v-model="newCandidate.position" class="input-glass" required>
+              <option value="" disabled>Select Position</option>
+              <option v-for="pos in positions" :key="pos.id" :value="pos.id">{{ pos.name }} ({{ pos.election_title }})</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Partylist</label>
+            <select v-model="newCandidate.partylist" class="input-glass">
+              <option :value="null">Independent</option>
+              <option v-for="party in partylists" :key="party.id" :value="party.id">{{ party.name }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Course & Year</label>
+            <input v-model="newCandidate.course_and_year" type="text" class="input-glass" placeholder="e.g. BSCS 4A" />
+          </div>
+          <div class="form-group">
+            <label>Platform Statement</label>
+            <textarea v-model="newCandidate.platform_statement" class="input-glass" rows="3"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" @click="showModal = false">Cancel</button>
+            <button type="submit" class="btn-primary" :disabled="submitting">
+              {{ submitting ? 'Saving...' : (isEditing ? 'Save Changes' : 'Add Candidate') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -47,7 +88,20 @@ import { ref, onMounted } from 'vue'
 import api from '../axios'
 
 const candidates = ref([])
-const showModal = ref(false) // Ready for future modal implementation
+const positions = ref([])
+const partylists = ref([])
+const showModal = ref(false)
+const isEditing = ref(false)
+const selectedCandidate = ref(null)
+const submitting = ref(false)
+
+const newCandidate = ref({
+    name: '',
+    position: '',
+    partylist: null,
+    course_and_year: '',
+    platform_statement: ''
+})
 
 const fetchCandidates = async () => {
     try {
@@ -58,8 +112,71 @@ const fetchCandidates = async () => {
     }
 }
 
+const openCreateModal = () => {
+    isEditing.value = false
+    selectedCandidate.value = null
+    newCandidate.value = { name: '', position: '', partylist: null, course_and_year: '', platform_statement: '' }
+    showModal.value = true
+}
+
+const openEditModal = (candidate) => {
+    isEditing.value = true
+    selectedCandidate.value = candidate
+    newCandidate.value = {
+        name: candidate.name,
+        position: candidate.position,
+        partylist: candidate.partylist,
+        course_and_year: candidate.course_and_year,
+        platform_statement: candidate.platform_statement
+    }
+    showModal.value = true
+}
+
+const fetchFormData = async () => {
+    try {
+        const [posRes, partyRes] = await Promise.all([
+            api.get('positions/'),
+            api.get('partylists/')
+        ])
+        positions.value = posRes.data
+        partylists.value = partyRes.data
+    } catch (error) {
+        console.error('Error fetching form data:', error)
+    }
+}
+
+const saveCandidate = async () => {
+    try {
+        submitting.value = true
+        if (isEditing.value) {
+            await api.put(`candidates/${selectedCandidate.value.id}/`, newCandidate.value)
+        } else {
+            await api.post('candidates/', newCandidate.value)
+        }
+        showModal.value = false
+        fetchCandidates()
+    } catch (error) {
+        console.error('Error saving candidate:', error)
+        alert('Failed to save candidate. Please verify all required fields.')
+    } finally {
+        submitting.value = false
+    }
+}
+
+const deleteCandidate = async (id) => {
+    if (!confirm('Are you sure you want to delete this candidate?')) return
+    try {
+        await api.delete(`candidates/${id}/`)
+        fetchCandidates()
+    } catch (error) {
+        console.error('Error deleting candidate:', error)
+        alert('Failed to delete candidate.')
+    }
+}
+
 onMounted(() => {
     fetchCandidates()
+    fetchFormData()
 })
 </script>
 
