@@ -170,9 +170,8 @@ const fetchResults = async () => {
 
 const calculateWidth = (votes, candidates) => {
   if (candidates.length === 0) return '0%';
-  // Scale relative to the total registered voters, so 1 vote doesn't fill the whole bar
-  const maxScale = Math.max(stats.value.total_voters, 10); 
-  return `${(votes / maxScale) * 100}%`;
+  const maxVotes = Math.max(...candidates.map(c => c.vote_count), 1); // Avoid division by 0
+  return `${(votes / maxVotes) * 100}%`;
 };
 
 onMounted(() => {
