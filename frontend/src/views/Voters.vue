@@ -12,6 +12,9 @@
         <button v-if="voters.length > 0" class="btn-primary" @click="printCards" style="background: rgba(16, 185, 129, 0.2); border-color: var(--success-color); color: var(--success-color);">
           🖨️ Print Voter Cards
         </button>
+        <button v-if="voters.length > 0" class="btn-primary btn-danger-outline" @click="clearAllVoters">
+          Remove All Voters
+        </button>
         <input type="file" ref="fileInput" @change="handleFileUpload" accept=".csv" style="display:none" />
         <button class="btn-primary" @click="triggerFileInput">+ Upload CSV</button>
       </div>
@@ -126,6 +129,22 @@ const deleteVoter = async (id) => {
         console.error('Error deleting voter:', error)
         alert('Failed to delete voter.')
     }
+}
+
+const clearAllVoters = async () => {
+    if (!confirm(`Are you sure you want to remove ALL ${voters.value.length} voter(s)? This cannot be undone.`)) return
+    if (!confirm('This will permanently delete all voter records. Are you absolutely sure?')) return
+    try {
+        const response = await api.delete('voters/clear_all/')
+        isUploadSuccess.value = true
+        uploadMsg.value = response.data.success || 'All voters removed.'
+        fetchVoters()
+    } catch (error) {
+        isUploadSuccess.value = false
+        uploadMsg.value = error.response?.data?.error || 'Failed to remove voters.'
+        console.error('Error clearing voters:', error)
+    }
+    setTimeout(() => { uploadMsg.value = ''; }, 5000)
 }
 
 const printCards = () => {
@@ -277,5 +296,13 @@ onUnmounted(() => {
 }
 .btn-icon-danger:hover {
     opacity: 1;
+}
+.btn-danger-outline {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border-color: var(--danger-color) !important;
+    color: var(--danger-color) !important;
+}
+.btn-danger-outline:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
 }
 </style>

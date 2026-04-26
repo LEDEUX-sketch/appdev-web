@@ -29,24 +29,45 @@
     <div class="main-content-grid">
       <div class="chart-container glass-panel">
         <div class="panel-header">
-          <h3>Turnout Progression</h3>
-          <span class="badge">Live</span>
+          <div style="display: flex; align-items: center; gap: 15px;">
+            <h3>Election Results</h3>
+            <select v-model="selectedElectionId" class="election-select input-glass" @change="fetchResults">
+              <option disabled value="">Select an election</option>
+              <option v-for="election in publishedElections" :key="election.id" :value="election.id">
+                {{ election.title }}
+              </option>
+            </select>
+          </div>
+          <span v-if="selectedElectionData" class="badge" :class="selectedElectionData.election.calculated_status.toLowerCase()">
+            {{ selectedElectionData.election.calculated_status }}
+          </span>
         </div>
-        <div class="chart-content">
-          <p v-if="loading" class="text-muted">Analyzing voting patterns...</p>
-          <div v-else-if="stats.turnout_progression?.length > 0" class="turnout-chart">
-            <div v-for="point in stats.turnout_progression" :key="point.label" class="chart-bar-wrapper">
-              <div class="bar-container">
-                <div class="bar" :style="{ height: calculateBarHeight(point.value) }">
-                  <span class="bar-tooltip">{{ point.value }} votes</span>
+        <div class="chart-content results-container">
+          <p v-if="loadingResults" class="text-muted text-center" style="padding: 40px 0;">Loading results...</p>
+          
+          <div v-else-if="selectedElectionData && selectedElectionData.positions.length > 0" class="positions-list">
+            <div v-for="pos in selectedElectionData.positions" :key="pos.id" class="position-result-group">
+              <h4 class="position-title">{{ pos.name }}</h4>
+              
+              <div v-for="cand in pos.candidates" :key="cand.id" class="candidate-bar-row">
+                <div class="candidate-info">
+                  <span class="cand-name">{{ cand.name }}</span>
+                  <span class="cand-votes">{{ cand.vote_count }} votes</span>
+                </div>
+                <div class="bar-bg">
+                  <div class="bar-fill" :style="{ width: calculateWidth(cand.vote_count, pos.candidates) }"></div>
                 </div>
               </div>
-              <span class="bar-label">{{ point.label }}</span>
+              
+              <div v-if="pos.candidates.length === 0" class="text-muted" style="font-size: 13px; margin-top: 5px;">
+                No candidates for this position.
+              </div>
             </div>
           </div>
+          
           <div v-else class="placeholder-chart">
             <div class="empty-state">
-              <p>Voting data will appear here as the election progresses.</p>
+              <p>Select a published election to view real-time results.</p>
             </div>
           </div>
         </div>
@@ -91,7 +112,12 @@ const stats = ref({
 });
 
 const loading = ref(true);
+const publishedElections = ref([]);
+const selectedElectionId = ref("");
+const selectedElectionData = ref(null);
+const loadingResults = ref(false);
 let refreshInterval = null;
+let resultsInterval = null;
 
 const statItems = computed(() => [
   { title: 'Active Elections', value: stats.value.active_elections, color: '#3b82f6', icon: 'fas fa-poll' },
@@ -112,21 +138,64 @@ const fetchStats = async () => {
   }
 };
 
-const calculateBarHeight = (value) => {
-  if (!stats.value.turnout_progression || stats.value.turnout_progression.length === 0) return '0%';
-  const val = Number(value) || 0;
-  const max = Math.max(...stats.value.turnout_progression.map(p => Number(p.value) || 0), 10);
-  return `${(val / max) * 100}%`;
+const fetchPublishedElections = async () => {
+  try {
+    const response = await axios.get('elections/');
+    // Filter out draft elections
+    publishedElections.value = response.data.filter(e => e.status !== 'DRAFT');
+    
+    // Auto-select the first active election if none is selected
+    if (!selectedElectionId.value && publishedElections.value.length > 0) {
+      const active = publishedElections.value.find(e => e.calculated_status === 'ACTIVE' || e.status === 'ACTIVE');
+      selectedElectionId.value = active ? active.id : publishedElections.value[0].id;
+      fetchResults();
+    }
+  } catch (error) {
+    console.error('Failed to fetch published elections:', error);
+  }
+};
+
+const fetchResults = async () => {
+  if (!selectedElectionId.value) return;
+  try {
+    if (!selectedElectionData.value) loadingResults.value = true; // only show loading indicator on first load
+    const response = await axios.get(`elections/${selectedElectionId.value}/results/`);
+    selectedElectionData.value = response.data;
+  } catch (error) {
+    console.error('Failed to fetch election results:', error);
+  } finally {
+    loadingResults.value = false;
+  }
+};
+
+const calculateWidth = (votes, candidates) => {
+  if (candidates.length === 0) return '0%';
+  // Scale relative to the total registered voters, so 1 vote doesn't fill the whole bar
+  const maxScale = Math.max(stats.value.total_voters, 10); 
+  return `${(votes / maxScale) * 100}%`;
 };
 
 onMounted(() => {
   fetchStats();
-  // Auto-refresh every 60 seconds
-  refreshInterval = setInterval(fetchStats, 60000);
+  fetchPublishedElections();
+  
+  // Auto-refresh stats every 60 seconds
+  refreshInterval = setInterval(() => {
+      fetchStats();
+      fetchPublishedElections();
+  }, 60000);
+
+  // Auto-refresh results every 15 seconds
+  resultsInterval = setInterval(() => {
+      if (selectedElectionId.value) {
+          fetchResults();
+      }
+  }, 15000);
 });
 
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval);
+  if (resultsInterval) clearInterval(resultsInterval);
 });
 </script>
 
@@ -235,13 +304,25 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 .badge {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
+}
+.badge.active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+.badge.completed {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.badge.upcoming {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
 }
 .placeholder-chart {
   height: 300px;
@@ -289,58 +370,75 @@ onUnmounted(() => {
   100% { opacity: 1; }
 }
 
-/* Chart Styles */
-.turnout-chart {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
-  height: 250px;
-  padding-top: 20px;
+/* Results Styles */
+.results-container {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
 }
-.chart-bar-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  height: 100%;
+.positions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
 }
-.bar-container {
-  flex: 1;
-  width: 30px;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 4px;
-  margin-bottom: 8px;
+.position-result-group {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
-.bar {
-  width: 100%;
-  background: linear-gradient(to top, var(--primary-color), #60a5fa);
-  border-radius: 4px;
-  position: relative;
-  transition: height 0.5s ease;
+.position-title {
+    font-size: 16px;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 8px;
 }
-.bar:hover .bar-tooltip {
-  display: block;
+.candidate-bar-row {
+    margin-bottom: 15px;
 }
-.bar-tooltip {
-  display: none;
-  position: absolute;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1e293b;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  z-index: 10;
+.candidate-bar-row:last-child {
+    margin-bottom: 0;
 }
-.bar-label {
-  font-size: 11px;
-  color: #64748b;
+.candidate-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+.cand-name {
+    color: #e2e8f0;
+    font-weight: 500;
+}
+.cand-votes {
+    color: #94a3b8;
+    font-size: 13px;
+}
+.bar-bg {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.bar-fill {
+    height: 100%;
+    background: linear-gradient(to right, #3b82f6, #60a5fa);
+    border-radius: 6px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.election-select {
+    background: rgba(15, 23, 42, 0.6);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    min-width: 200px;
+    outline: none;
+}
+.election-select:focus {
+    border-color: var(--primary-color);
 }
 
 .animation-fade-in {

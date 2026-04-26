@@ -17,6 +17,34 @@ class ElectionViewSet(viewsets.ModelViewSet):
     serializer_class = ElectionSerializer
     permission_classes = [IsAuthenticated]
 
+    @action(detail=True, methods=['GET'])
+    def results(self, request, pk=None):
+        election = self.get_object()
+        positions = Position.objects.filter(election=election)
+        
+        data = {
+            'election': ElectionSerializer(election).data,
+            'positions': []
+        }
+        
+        from django.db.models import Count
+        for pos in positions:
+            candidates = Candidate.objects.filter(position=pos).annotate(
+                vote_count=Count('votes')
+            ).order_by('-vote_count')
+            
+            pos_data = PositionSerializer(pos).data
+            pos_data['candidates'] = []
+            
+            for cand in candidates:
+                cand_data = CandidateSerializer(cand).data
+                cand_data['vote_count'] = cand.vote_count
+                pos_data['candidates'].append(cand_data)
+                
+            data['positions'].append(pos_data)
+            
+        return Response(data)
+
 class PositionViewSet(viewsets.ModelViewSet):
     queryset = Position.objects.all()
     serializer_class = PositionSerializer
@@ -63,6 +91,14 @@ class VoterViewSet(viewsets.ModelViewSet):
             return Response({'success': f'{created_count} voters imported successfully'}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['DELETE'], url_path='clear_all')
+    def clear_all(self, request):
+        count = Voter.objects.count()
+        if count == 0:
+            return Response({'message': 'No voters to remove.'}, status=status.HTTP_200_OK)
+        Voter.objects.all().delete()
+        return Response({'success': f'{count} voter(s) removed successfully.'}, status=status.HTTP_200_OK)
 
 class VoteRecordViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = VoteRecord.objects.all()

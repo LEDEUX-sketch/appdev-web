@@ -24,9 +24,10 @@
         </div>
       </div>
       <div class="election-actions">
+        <button v-if="(election.calculated_status || election.status) === 'DRAFT'" class="btn-publish" @click="publishElection(election)">Publish</button>
         <button class="btn-primary-sm" @click="openPositionModal(election)">Manage Positions</button>
         <button class="btn-text-sm" @click="openEditModal(election)">Edit Details</button>
-        <button class="btn-text-sm text-danger" @click="deleteElection(election.id)">Delete</button>
+        <button class="btn-text-sm text-danger" @click="promptDeleteElection(election)">Delete</button>
       </div>
     </div>
 
@@ -52,14 +53,7 @@
             <label>End Date & Time</label>
             <input v-model="newElection.end_date" type="datetime-local" class="input-glass" required />
           </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select v-model="newElection.status" class="input-glass">
-              <option value="DRAFT">DRAFT</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="COMPLETED">COMPLETED</option>
-            </select>
-          </div>
+
           <div class="modal-actions">
             <button type="button" class="btn-secondary" @click="showModal = false">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="submitting">
@@ -103,6 +97,43 @@
         </div>
       </div>
     </div>
+
+    <!-- Publish Confirmation Modal -->
+    <div v-if="showPublishModal" class="modal-overlay" @click.self="showPublishModal = false">
+      <div class="modal-content glass-panel" style="max-width: 450px; text-align: center;">
+        <h2>Publish Election</h2>
+        <p style="margin: 15px 0; color: #cbd5e1;">
+          Are you sure you want to publish <strong>{{ electionToPublish?.title }}</strong>?
+        </p>
+        <p style="margin-bottom: 25px; color: #94a3b8; font-size: 14px;">
+          Once published, the election will automatically become active when its start date is reached. This action cannot be undone.
+        </p>
+        <div class="modal-actions" style="justify-content: center;">
+          <button type="button" class="btn-secondary" @click="showPublishModal = false">Cancel</button>
+          <button type="button" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border-color: var(--success-color); color: var(--success-color);" @click="confirmPublish">
+            Yes, Publish
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+      <div class="modal-content glass-panel" style="max-width: 450px; text-align: center;">
+        <h2>Delete Election</h2>
+        <p style="margin: 15px 0; color: #cbd5e1;">
+          Are you sure you want to delete <strong>{{ electionToDelete?.title }}</strong>?
+        </p>
+        <p style="margin-bottom: 25px; color: #ef4444; font-size: 14px;">
+          This will permanently remove the election, all its positions, and associated candidates. This action cannot be undone.
+        </p>
+        <div class="modal-actions" style="justify-content: center;">
+          <button type="button" class="btn-secondary" @click="showDeleteModal = false">Cancel</button>
+          <button type="button" class="btn-primary" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #ef4444;" @click="confirmDelete">
+            Yes, Delete Election
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -114,6 +145,10 @@ const elections = ref([])
 const positions = ref([])
 const showModal = ref(false)
 const showPositionModal = ref(false)
+const showPublishModal = ref(false)
+const electionToPublish = ref(null)
+const showDeleteModal = ref(false)
+const electionToDelete = ref(null)
 const isEditing = ref(false)
 const selectedElection = ref(null)
 const submitting = ref(false)
@@ -123,8 +158,7 @@ let refreshInterval = null
 const newElection = ref({
     title: '',
     start_date: '',
-    end_date: '',
-    status: 'DRAFT'
+    end_date: ''
 })
 
 const newPosition = ref({
@@ -164,8 +198,7 @@ const openEditModal = (election) => {
     newElection.value = {
         title: election.title,
         start_date: toLocalISO(start),
-        end_date: toLocalISO(end),
-        status: election.status || 'DRAFT'
+        end_date: toLocalISO(end)
     }
     showModal.value = true
 }
@@ -173,7 +206,7 @@ const openEditModal = (election) => {
 const resetForm = () => {
     isEditing.value = false
     selectedElection.value = null
-    newElection.value = { title: '', start_date: '', end_date: '', status: 'DRAFT' }
+    newElection.value = { title: '', start_date: '', end_date: '' }
 }
 
 const openPositionModal = async (election) => {
@@ -218,10 +251,17 @@ const deletePosition = async (id) => {
     }
 }
 
-const deleteElection = async (id) => {
-    if (!confirm('Are you sure you want to delete this election? All related positions and candidates will be affected.')) return
+const promptDeleteElection = (election) => {
+    electionToDelete.value = election
+    showDeleteModal.value = true
+}
+
+const confirmDelete = async () => {
+    if (!electionToDelete.value) return
     try {
-        await api.delete(`elections/${id}/`)
+        await api.delete(`elections/${electionToDelete.value.id}/`)
+        showDeleteModal.value = false
+        electionToDelete.value = null
         fetchElections()
     } catch (error) {
         console.error('Error deleting election:', error)
@@ -232,10 +272,14 @@ const deleteElection = async (id) => {
 const saveElection = async () => {
     try {
         submitting.value = true
+        const payload = { ...newElection.value }
+        if (!isEditing.value) {
+            payload.status = 'DRAFT'
+        }
         if (isEditing.value) {
-            await api.put(`elections/${selectedElection.value.id}/`, newElection.value)
+            await api.put(`elections/${selectedElection.value.id}/`, payload)
         } else {
-            await api.post('elections/', newElection.value)
+            await api.post('elections/', payload)
         }
         showModal.value = false
         resetForm()
@@ -245,6 +289,24 @@ const saveElection = async () => {
         alert('Failed to save election. Check your input.')
     } finally {
         submitting.value = false
+    }
+}
+
+const publishElection = (election) => {
+    electionToPublish.value = election
+    showPublishModal.value = true
+}
+
+const confirmPublish = async () => {
+    if (!electionToPublish.value) return
+    try {
+        await api.patch(`elections/${electionToPublish.value.id}/`, { status: 'ACTIVE' })
+        showPublishModal.value = false
+        electionToPublish.value = null
+        fetchElections()
+    } catch (error) {
+        console.error('Error publishing election:', error)
+        alert('Failed to publish election.')
     }
 }
 
@@ -326,6 +388,20 @@ onUnmounted(() => {
     gap: 8px;
     padding-left: 20px;
     border-left: 1px solid var(--glass-border);
+}
+.btn-publish {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid var(--success-color);
+    color: var(--success-color);
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+.btn-publish:hover {
+    background: rgba(16, 185, 129, 0.3);
 }
 .btn-primary-sm {
     background: var(--primary-color);
