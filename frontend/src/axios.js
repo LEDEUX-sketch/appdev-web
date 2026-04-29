@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const instance = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api/',
+    baseURL: import.meta.env.VITE_API_URL || 'https://soavs-backend.onrender.com/api/',
     timeout: 10000,
 });
 
@@ -45,7 +45,7 @@ instance.interceptors.response.use(
             if (refreshToken) {
                 try {
                     // Try to get a new access token
-                    const response = await axios.post('http://127.0.0.1:8000/api/auth/token/refresh/', {
+                    const response = await axios.post(`${instance.defaults.baseURL}auth/token/refresh/`, {
                         refresh: refreshToken
                     });
 
