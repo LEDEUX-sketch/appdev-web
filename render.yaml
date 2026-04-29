@@ -1,0 +1,51 @@
+services:
+  # --- BACKEND (Django) ---
+  - type: web
+    name: soavs-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn core.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: soavs-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: RENDER_EXTERNAL_HOSTNAME
+        fromService:
+          type: web
+          name: soavs-backend
+          property: host
+      # Superuser creation settings
+      - key: CREATE_SUPERUSER
+        value: "true"
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: "admin"
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: "admin@example.com"
+      - key: DJANGO_SUPERUSER_PASSWORD
+        generateValue: true # Render will generate a random password for you
+
+  # --- FRONTEND (Vue/Vite) ---
+  - type: static
+    name: soavs-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: "npm run build"
+    publishDir: "dist"
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: soavs-backend
+          property: url
+        # Note: axios.js will append /api/ if needed, but usually the property 'url'
+        # gives the full https://... domain.
+
+databases:
+  - name: soavs-db
+    plan: free # Use the free tier

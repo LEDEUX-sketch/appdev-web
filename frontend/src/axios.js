@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+const getBaseURL = () => {
+    let url = import.meta.env.VITE_API_URL || 'https://soavs-backend.onrender.com/api/';
+    if (!url.endsWith('/')) url += '/';
+    if (!url.includes('/api/')) url += 'api/';
+    return url;
+};
+
 const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'https://soavs-backend.onrender.com/api/',
+    baseURL: getBaseURL(),
     timeout: 10000,
 });
 
