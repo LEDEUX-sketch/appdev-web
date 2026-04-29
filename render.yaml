@@ -20,7 +20,6 @@ services:
           type: web
           name: soavs-backend
           property: host
-      # Superuser creation settings
       - key: CREATE_SUPERUSER
         value: "true"
       - key: DJANGO_SUPERUSER_USERNAME
@@ -28,24 +27,22 @@ services:
       - key: DJANGO_SUPERUSER_EMAIL
         value: "admin@example.com"
       - key: DJANGO_SUPERUSER_PASSWORD
-        generateValue: true # Render will generate a random password for you
+        generateValue: true
 
   # --- FRONTEND (Vue/Vite) ---
-  - type: static
+  - type: web
     name: soavs-frontend
     runtime: static
     rootDir: frontend
     buildCommand: "npm run build"
-    publishDir: "dist"
+    staticPublishPath: "dist"
     envVars:
       - key: VITE_API_URL
         fromService:
           type: web
           name: soavs-backend
           property: url
-        # Note: axios.js will append /api/ if needed, but usually the property 'url'
-        # gives the full https://... domain.
 
 databases:
   - name: soavs-db
-    plan: free # Use the free tier
+    plan: free
