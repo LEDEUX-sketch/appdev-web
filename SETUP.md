@@ -107,12 +107,11 @@ The application uses a MySQL database named `voting`.
 | djangorestframework             | 3.17.1  | REST API toolkit                |
 | djangorestframework-simplejwt   | 5.5.1   | JWT authentication              |
 | django-cors-headers             | 4.9.0   | CORS handling                   |
-| mysqlclient                     | 2.2.8   | MySQL database adapter          |
+| mysqlclient                     | 2.2.8   | MySQL database adapter (Dev & Prod) |
 | pillow                          | 12.2.0  | Image processing                |
 | gunicorn                        | 23.0.0  | Production WSGI server          |
 | dj-database-url                 | 2.3.0   | Database URL parsing (deploy)   |
 | whitenoise                      | 6.9.0   | Static file serving (deploy)    |
-| psycopg2-binary                 | 2.9.10  | PostgreSQL adapter (deploy)     |
 
 ---
 
@@ -167,7 +166,20 @@ The mobile app is in a separate directory (`appdev mob`).
 
 4. Scan the QR code with the **Expo Go** app on your device, or press `a` to open in an Android emulator.
 
-> **Note:** The mobile app connects to the backend API. Ensure the backend server is running and accessible from your device. If testing on a physical device, you may need to use a tunnel (e.g., `npx expo start --tunnel`) or update the API base URL in the `services/` directory to point to your machine's local IP address.
+### Configuring the API URL
+The mobile app connects to the backend API via a configurable URL in `app.json`.
+
+1. Open `appdev mob/app.json`.
+2. Locate the `extra` section and update `apiUrl`:
+   ```json
+   "extra": {
+     "apiUrl": "https://your-tunnel-id.loca.lt"
+   }
+   ```
+3. If you are using Ngrok or LocalTunnel, paste your tunnel URL there.
+4. For local testing on an emulator, you can use `http://10.0.2.2:8000` (Android) or `http://localhost:8000` (iOS).
+
+> **Note:** The app uses `expo-constants` to read this value. Changes to `app.json` require a restart of the Expo server to take effect.
 
 ### Building an APK
 
@@ -213,19 +225,20 @@ The backend is configured for deployment on [Render](https://render.com/) using 
    - **Root Directory:** `backend`
 3. **Set Environment Variables** on Render:
 
-   | Variable         | Value                              |
-   |------------------|------------------------------------|
-   | `DATABASE_URL`   | Your PostgreSQL connection string   |
-   | `SECRET_KEY`     | A strong, random secret key         |
-   | `DEBUG`          | `False`                             |
-   | `ALLOWED_HOSTS`  | Your Render domain                  |
+   | Variable                 | Value                                     |
+   |--------------------------|-------------------------------------------|
+   | `DATABASE_URL`           | Your MySQL connection string (PlanetScale/etc) |
+   | `DJANGO_SECRET_KEY`      | A strong, random secret key               |
+   | `DJANGO_DEBUG`           | `False`                                   |
+   | `DJANGO_ALLOWED_HOSTS`   | `your-app.onrender.com`                   |
+   | `CORS_ALLOWED_ORIGINS`   | `https://your-frontend-domain.com`        |
 
 4. The `build.sh` script will automatically:
    - Install Python dependencies from `requirements.txt`
    - Collect static files
    - Run database migrations
 
-> **Note:** The production deployment uses PostgreSQL (via `psycopg2-binary` and `dj-database-url`) instead of MySQL.
+> **Note:** The project is configured to use **MySQL** in both development and production for consistency. Ensure your production database provides a `DATABASE_URL` compatible with `mysqlclient`.
 
 ---
 
@@ -234,7 +247,7 @@ The backend is configured for deployment on [Render](https://render.com/) using 
 | Issue                              | Solution                                                                 |
 |------------------------------------|--------------------------------------------------------------------------|
 | `mysqlclient` install fails        | Install MySQL dev headers: `sudo apt install libmysqlclient-dev` (Linux) or use XAMPP's bundled libraries (Windows) |
-| CORS errors in browser             | Ensure `django-cors-headers` is installed and `CORS_ALLOW_ALL_ORIGINS = True` is in `settings.py` |
-| Mobile app can't reach backend     | Use `npx expo start --tunnel` or set the API URL to your machine's LAN IP |
+| CORS errors in browser             | Ensure `CORS_ALLOWED_ORIGINS` environment variable is set correctly in production. In dev, it defaults to allowing all if `DEBUG=True`. |
+| Mobile app can't reach backend     | Update `apiUrl` in `appdev mob/app.json` to your tunnel URL or local IP address. |
 | `npm install` fails in frontend    | Delete `node_modules` and `package-lock.json`, then run `npm install` again |
 | Migrations fail                    | Ensure the `voting` database exists and MySQL is running                  |

@@ -82,7 +82,7 @@
                 <strong>{{ pos.name }}</strong>
                 <span>(Max votes: {{ pos.max_votes_allowed }})</span>
               </div>
-              <button class="btn-icon-danger" @click="deletePosition(pos.id)">🗑️</button>
+              <button class="btn-icon-danger" @click="promptDeletePosition(pos)">🗑️</button>
             </div>
           </div>
         </div>
@@ -134,12 +134,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Position Delete Confirmation -->
+    <ConfirmDialog
+      :visible="showPositionDeleteDialog"
+      title="Delete Position"
+      :message="`Are you sure you want to delete the position '${positionToDelete?.name}'?`"
+      subtitle="This will also remove all candidates running for this position."
+      confirmText="Yes, Delete"
+      variant="danger"
+      @confirm="confirmDeletePosition"
+      @cancel="showPositionDeleteDialog = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import api from '../axios'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const elections = ref([])
 const positions = ref([])
@@ -153,6 +166,8 @@ const isEditing = ref(false)
 const selectedElection = ref(null)
 const submitting = ref(false)
 const submittingPosition = ref(false)
+const showPositionDeleteDialog = ref(false)
+const positionToDelete = ref(null)
 let refreshInterval = null
 
 const newElection = ref({
@@ -218,7 +233,7 @@ const openPositionModal = async (election) => {
 const fetchPositionsForElection = async (electionId) => {
     try {
         const response = await api.get(`positions/?election=${electionId}`)
-        positions.value = response.data.filter(p => p.election === electionId)
+        positions.value = response.data
     } catch (error) {
         console.error('Error fetching positions:', error)
     }
@@ -241,10 +256,17 @@ const createPosition = async () => {
     }
 }
 
-const deletePosition = async (id) => {
-    if (!confirm('Are you sure you want to delete this position?')) return
+const promptDeletePosition = (pos) => {
+    positionToDelete.value = pos
+    showPositionDeleteDialog.value = true
+}
+
+const confirmDeletePosition = async () => {
+    if (!positionToDelete.value) return
     try {
-        await api.delete(`positions/${id}/`)
+        await api.delete(`positions/${positionToDelete.value.id}/`)
+        showPositionDeleteDialog.value = false
+        positionToDelete.value = null
         fetchPositionsForElection(selectedElection.value.id)
     } catch (error) {
         console.error('Error deleting position:', error)

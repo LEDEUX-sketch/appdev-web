@@ -46,7 +46,8 @@
               </span>
             </td>
             <td>
-              <button class="btn-icon-danger" @click="deleteVoter(voter.id)">🗑️</button>
+              <button class="btn-icon-warning" @click="promptRevokeToken(voter)" title="Revoke & Regenerate Token" style="margin-right: 8px;">🔑</button>
+              <button class="btn-icon-danger" @click="promptDeleteVoter(voter)">🗑️</button>
             </td>
           </tr>
           <tr v-if="voters.length === 0">
@@ -58,26 +59,71 @@
     <!-- Printable Voter Cards (Hidden by default, shown only in print) -->
     <div id="printable-cards" class="print-only">
       <div class="voter-cards-grid">
-        <div v-for="voter in voters" :key="voter.id" class="voter-card">
+        <div v-for="voter in printableVoters" :key="voter.id" class="voter-card">
           <div class="card-title">SOAVS Voter Card</div>
           <div class="card-detail"><strong>Name:</strong> {{ voter.name }}</div>
           <div class="card-detail"><strong>Student ID:</strong> {{ voter.student_id }}</div>
           <div class="card-detail token-detail"><strong>Token:</strong> {{ voter.unique_voting_token }}</div>
+          <div class="qr-container">
+            <img :src="`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(JSON.stringify({student_id: voter.student_id, token: voter.unique_voting_token}))}`" alt="QR Code" />
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- Delete Single Voter Confirmation -->
+    <ConfirmDialog
+      :visible="showDeleteDialog"
+      title="Delete Voter"
+      :message="`Remove ${voterToDelete?.name} (${voterToDelete?.student_id}) from the voter roll?`"
+      confirmText="Yes, Delete"
+      variant="danger"
+      @confirm="confirmDeleteVoter"
+      @cancel="showDeleteDialog = false"
+    />
+
+    <!-- Clear All Voters Confirmation -->
+    <ConfirmDialog
+      :visible="showClearAllDialog"
+      title="Remove All Voters"
+      :message="`This will permanently delete all ${voters.length} voter(s) from the system.`"
+      subtitle="This action cannot be undone. All voter records and their tokens will be lost."
+      confirmText="Yes, Remove All"
+      variant="danger"
+      @confirm="confirmClearAll"
+      @cancel="showClearAllDialog = false"
+    />
+
+    <!-- Revoke Token Confirmation -->
+    <ConfirmDialog
+      :visible="showRevokeDialog"
+      title="Regenerate Token"
+      :message="`This will invalidate the current QR/Token for ${voterToRevoke?.name} and generate a new one.`"
+      subtitle="The student will be logged out of any active sessions and must scan the new QR code to vote."
+      confirmText="Regenerate Token"
+      variant="warning"
+      @confirm="confirmRevokeToken"
+      @cancel="showRevokeDialog = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import api from '../axios'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const voters = ref([])
 const fileInput = ref(null)
 const uploadMsg = ref('')
 const isUploadSuccess = ref(true)
 const loading = ref(false)
+const showDeleteDialog = ref(false)
+const voterToDelete = ref(null)
+const showClearAllDialog = ref(false)
+const showRevokeDialog = ref(false)
+const voterToRevoke = ref(null)
+const printableVoters = ref([])
 
 let refreshInterval = null
 
@@ -120,20 +166,54 @@ const handleFileUpload = async (event) => {
     event.target.value = null
 }
 
-const deleteVoter = async (id) => {
-    if (!confirm('Are you sure you want to delete this voter?')) return
+const promptDeleteVoter = (voter) => {
+    voterToDelete.value = voter
+    showDeleteDialog.value = true
+}
+
+const confirmDeleteVoter = async () => {
+    if (!voterToDelete.value) return
     try {
-        await api.delete(`voters/${id}/`)
+        await api.delete(`voters/${voterToDelete.value.id}/`)
+        showDeleteDialog.value = false
+        voterToDelete.value = null
         fetchVoters()
     } catch (error) {
         console.error('Error deleting voter:', error)
-        alert('Failed to delete voter.')
+        isUploadSuccess.value = false
+        uploadMsg.value = 'Failed to delete voter.'
+        setTimeout(() => { uploadMsg.value = ''; }, 5000)
     }
 }
 
-const clearAllVoters = async () => {
-    if (!confirm(`Are you sure you want to remove ALL ${voters.value.length} voter(s)? This cannot be undone.`)) return
-    if (!confirm('This will permanently delete all voter records. Are you absolutely sure?')) return
+const promptRevokeToken = (voter) => {
+    voterToRevoke.value = voter
+    showRevokeDialog.value = true
+}
+
+const confirmRevokeToken = async () => {
+    if (!voterToRevoke.value) return
+    try {
+        await api.post(`voters/${voterToRevoke.value.id}/revoke_token/`)
+        isUploadSuccess.value = true
+        uploadMsg.value = `Token for ${voterToRevoke.value.name} regenerated successfully.`
+        showRevokeDialog.value = false
+        voterToRevoke.value = null
+        fetchVoters()
+    } catch (error) {
+        console.error('Error revoking token:', error)
+        isUploadSuccess.value = false
+        uploadMsg.value = 'Failed to regenerate token.'
+    }
+    setTimeout(() => { uploadMsg.value = ''; }, 5000)
+}
+
+const clearAllVoters = () => {
+    showClearAllDialog.value = true
+}
+
+const confirmClearAll = async () => {
+    showClearAllDialog.value = false
     try {
         const response = await api.delete('voters/clear_all/')
         isUploadSuccess.value = true
@@ -147,8 +227,20 @@ const clearAllVoters = async () => {
     setTimeout(() => { uploadMsg.value = ''; }, 5000)
 }
 
-const printCards = () => {
-    window.print()
+const printCards = async () => {
+    // Fetch voter data with tokens from the dedicated print-cards endpoint
+    try {
+        const response = await api.get('voters/print-cards/')
+        printableVoters.value = response.data
+        // Allow Vue to render the print content, then trigger print
+        await nextTick()
+        window.print()
+    } catch (error) {
+        console.error('Error fetching print data:', error)
+        isUploadSuccess.value = false
+        uploadMsg.value = 'Failed to load voter cards for printing.'
+        setTimeout(() => { uploadMsg.value = ''; }, 5000)
+    }
 }
 
 onMounted(() => {
@@ -208,6 +300,16 @@ onUnmounted(() => {
         border: 1px solid #000;
         text-align: center;
         background: #f9f9f9 !important;
+    }
+    .qr-container {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .qr-container img {
+        width: 120px;
+        height: 120px;
     }
 }
 </style>
@@ -295,6 +397,16 @@ onUnmounted(() => {
     font-size: 16px;
 }
 .btn-icon-danger:hover {
+    opacity: 1;
+}
+.btn-icon-warning {
+    background: transparent;
+    padding: 5px;
+    opacity: 0.6;
+    font-size: 16px;
+    cursor: pointer;
+}
+.btn-icon-warning:hover {
     opacity: 1;
 }
 .btn-danger-outline {

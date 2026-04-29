@@ -123,7 +123,15 @@ const statItems = computed(() => [
   { title: 'Active Elections', value: stats.value.active_elections, color: '#3b82f6', icon: 'fas fa-poll' },
   { title: 'Total Candidates', value: stats.value.total_candidates, color: '#10b981', icon: 'fas fa-user-tie' },
   { title: 'Total Voters', value: stats.value.total_voters?.toLocaleString(), color: '#8b5cf6', icon: 'fas fa-users' },
-  { title: 'Votes Cast', value: stats.value.total_votes?.toLocaleString(), color: '#f59e0b', icon: 'fas fa-vote-yea' }
+  { title: 'Votes Cast', value: stats.value.total_votes?.toLocaleString(), color: '#f59e0b', icon: 'fas fa-vote-yea' },
+  { 
+    title: 'Voter Turnout', 
+    value: stats.value.total_voters > 0 
+      ? `${((stats.value.total_votes / stats.value.total_voters) * 100).toFixed(1)}%` 
+      : '0%', 
+    color: '#ec4899', 
+    icon: 'fas fa-chart-line' 
+  }
 ]);
 
 const fetchStats = async () => {

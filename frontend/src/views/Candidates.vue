@@ -29,7 +29,7 @@
         </div>
         <div class="candidate-actions">
           <button class="btn-text" @click="openEditModal(candidate)">Edit</button>
-          <button class="btn-text text-danger" @click="deleteCandidate(candidate.id)">Delete</button>
+          <button class="btn-text text-danger" @click="promptDeleteCandidate(candidate)">Delete</button>
         </div>
       </div>
     </div>
@@ -71,6 +71,13 @@
             <label>Platform Statement</label>
             <textarea v-model="newCandidate.platform_statement" class="input-glass" rows="3"></textarea>
           </div>
+          <div class="form-group">
+            <label>Photo</label>
+            <input type="file" @change="handleFileUpload" accept="image/*" class="input-glass" />
+            <p v-if="isEditing && candidate.photo" class="text-muted" style="font-size: 11px; margin-top: 5px;">
+              Leave blank to keep existing photo.
+            </p>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" @click="showModal = false">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="submitting">
@@ -80,12 +87,25 @@
         </form>
       </div>
     </div>
+
+    <!-- Delete Candidate Confirmation -->
+    <ConfirmDialog
+      :visible="showDeleteDialog"
+      title="Delete Candidate"
+      :message="`Are you sure you want to delete ${candidateToDelete?.name}?`"
+      subtitle="This will permanently remove the candidate and their associated votes."
+      confirmText="Yes, Delete"
+      variant="danger"
+      @confirm="confirmDeleteCandidate"
+      @cancel="showDeleteDialog = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '../axios'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const candidates = ref([])
 const positions = ref([])
@@ -94,14 +114,21 @@ const showModal = ref(false)
 const isEditing = ref(false)
 const selectedCandidate = ref(null)
 const submitting = ref(false)
+const showDeleteDialog = ref(false)
+const candidateToDelete = ref(null)
 
 const newCandidate = ref({
     name: '',
     position: '',
     partylist: null,
     course_and_year: '',
-    platform_statement: ''
+    platform_statement: '',
+    photo: null
 })
+
+const handleFileUpload = (event) => {
+    newCandidate.value.photo = event.target.files[0]
+}
 
 const fetchCandidates = async () => {
     try {
@@ -148,10 +175,28 @@ const fetchFormData = async () => {
 const saveCandidate = async () => {
     try {
         submitting.value = true
+        
+        const formData = new FormData()
+        formData.append('name', newCandidate.value.name)
+        formData.append('position', newCandidate.value.position)
+        if (newCandidate.value.partylist) formData.append('partylist', newCandidate.value.partylist)
+        formData.append('course_and_year', newCandidate.value.course_and_year)
+        formData.append('platform_statement', newCandidate.value.platform_statement)
+        
+        if (newCandidate.value.photo) {
+            formData.append('photo', newCandidate.value.photo)
+        }
+
+        const config = {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        }
+
         if (isEditing.value) {
-            await api.put(`candidates/${selectedCandidate.value.id}/`, newCandidate.value)
+            await api.patch(`candidates/${selectedCandidate.value.id}/`, formData, config)
         } else {
-            await api.post('candidates/', newCandidate.value)
+            await api.post('candidates/', formData, config)
         }
         showModal.value = false
         fetchCandidates()
@@ -163,10 +208,17 @@ const saveCandidate = async () => {
     }
 }
 
-const deleteCandidate = async (id) => {
-    if (!confirm('Are you sure you want to delete this candidate?')) return
+const promptDeleteCandidate = (candidate) => {
+    candidateToDelete.value = candidate
+    showDeleteDialog.value = true
+}
+
+const confirmDeleteCandidate = async () => {
+    if (!candidateToDelete.value) return
     try {
-        await api.delete(`candidates/${id}/`)
+        await api.delete(`candidates/${candidateToDelete.value.id}/`)
+        showDeleteDialog.value = false
+        candidateToDelete.value = null
         fetchCandidates()
     } catch (error) {
         console.error('Error deleting candidate:', error)

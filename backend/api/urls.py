@@ -9,7 +9,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'elections', ElectionViewSet)
-router.register(r'positions', PositionViewSet)
+router.register(r'positions', PositionViewSet, basename='position')
 router.register(r'partylists', PartylistViewSet)
 router.register(r'candidates', CandidateViewSet)
 router.register(r'voters', VoterViewSet)

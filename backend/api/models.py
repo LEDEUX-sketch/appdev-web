@@ -72,11 +72,19 @@ class Voter(models.Model):
     email = models.EmailField(unique=True)
     unique_voting_token = models.CharField(max_length=64, unique=True, blank=True)
     has_voted = models.BooleanField(default=False)
+    is_active_session = models.BooleanField(default=False)
+    session_started_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.unique_voting_token:
             self.unique_voting_token = get_random_string(32)
         super().save(*args, **kwargs)
+
+    def regenerate_token(self):
+        self.unique_voting_token = get_random_string(32)
+        self.is_active_session = False
+        self.session_started_at = None
+        self.save()
 
     def __str__(self):
         return f"{self.name} ({self.student_id})"
