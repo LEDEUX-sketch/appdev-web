@@ -26,6 +26,20 @@ instance.interceptors.request.use(
     }
 );
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 // Add a response interceptor to handle token expiration and auto-refresh
 instance.interceptors.response.use(
     (response) => response,
@@ -46,7 +60,19 @@ instance.interceptors.response.use(
                 return Promise.reject(error);
             }
 
+            if (isRefreshing) {
+                return new Promise(function(resolve, reject) {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return instance(originalRequest);
+                }).catch(err => {
+                    return Promise.reject(err);
+                });
+            }
+
             originalRequest._retry = true;
+            isRefreshing = true;
             const refreshToken = localStorage.getItem('refresh_token');
 
             if (refreshToken) {
@@ -58,11 +84,17 @@ instance.interceptors.response.use(
 
                     const newToken = response.data.access;
                     localStorage.setItem('access_token', newToken);
+                    
+                    isRefreshing = false;
+                    processQueue(null, newToken);
 
                     // Retry the original request with the new token
                     originalRequest.headers.Authorization = `Bearer ${newToken}`;
                     return instance(originalRequest);
                 } catch (refreshError) {
+                    isRefreshing = false;
+                    processQueue(refreshError, null);
+                    
                     // Refresh token is also invalid
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
@@ -70,6 +102,14 @@ instance.interceptors.response.use(
                     window.location.href = '/login';
                     return Promise.reject(refreshError);
                 }
+            } else {
+                // No refresh token available, redirect to login
+                isRefreshing = false;
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+                return Promise.reject(error);
             }
         }
 
