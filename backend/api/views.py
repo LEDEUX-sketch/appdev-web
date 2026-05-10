@@ -194,49 +194,56 @@ class VoterLoginView(APIView):
 
     def post(self, request):
         student_id = request.data.get('student_id')
-        token = request.data.get('token')
+        password = request.data.get('password')
 
-        if not student_id or not token:
-            return Response({'error': 'Student ID and Token are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not student_id or not password:
+            return Response({'error': 'Student ID and Password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Password is the student ID itself
+        if student_id != password:
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
         now = timezone.now()
-        active_elections_exist = Election.objects.filter(
-            ~Q(status='DRAFT'),
-            start_date__lte=now,
-            end_date__gte=now
-        ).exists()
-
-        if not active_elections_exist:
-            return Response({'error': 'There are no active elections at this time.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            with transaction.atomic():
-                voter = Voter.objects.select_for_update().get(student_id=student_id, unique_voting_token=token)
-                if voter.has_voted:
-                    return Response({'error': 'You already casted a vote'}, status=status.HTTP_403_FORBIDDEN)
-                
-                if voter.is_active_session and voter.session_started_at:
-                    if (now - voter.session_started_at).total_seconds() < 300: # 5 minutes
-                        return Response({'error': 'A voting session is already active on another device'}, status=status.HTTP_403_FORBIDDEN)
-                
-                voter.is_active_session = True
-                voter.session_started_at = now
-                voter.save()
-                
+            voter = Voter.objects.get(student_id=student_id)
+
+            # Only manage session and check elections for voters who haven't voted yet
+            if not voter.has_voted:
+                active_elections_exist = Election.objects.filter(
+                    ~Q(status='DRAFT'),
+                    start_date__lte=now,
+                    end_date__gte=now
+                ).exists()
+
+                if not active_elections_exist:
+                    return Response({'error': 'There are no active elections at this time.'}, status=status.HTTP_403_FORBIDDEN)
+
+                with transaction.atomic():
+                    voter = Voter.objects.select_for_update().get(id=voter.id)
+
+                    if voter.is_active_session and voter.session_started_at:
+                        if (now - voter.session_started_at).total_seconds() < 300:  # 5 minutes
+                            return Response({'error': 'A voting session is already active on another device'}, status=status.HTTP_403_FORBIDDEN)
+
+                    voter.is_active_session = True
+                    voter.session_started_at = now
+                    voter.save()
+
             serializer = VoterSerializer(voter)
-            
+
             encoded_jwt = jwt.encode({
-                'voter_id': voter.id, 
+                'voter_id': voter.id,
                 'student_id': voter.student_id,
                 'exp': now + timezone.timedelta(minutes=5)
             }, settings.SECRET_KEY, algorithm='HS256')
-            
+
             data = serializer.data
             data['access_token'] = encoded_jwt
-            
+
             return Response(data)
         except Voter.DoesNotExist:
-            return Response({'error': 'Invalid Student ID or Token'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Student ID not found in the voter roll'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class ActiveElectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ElectionSerializer

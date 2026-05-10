@@ -9,9 +9,6 @@
         <button class="btn-primary" @click="fetchVoters" :disabled="loading" style="background: rgba(59, 130, 246, 0.1); border-color: var(--primary-color); color: var(--primary-color);">
           🔄 Refresh
         </button>
-        <button v-if="voters.length > 0" class="btn-primary" @click="printCards" style="background: rgba(16, 185, 129, 0.2); border-color: var(--success-color); color: var(--success-color);">
-          🖨️ Print Voter Cards
-        </button>
         <button v-if="voters.length > 0" class="btn-primary btn-danger-outline" @click="clearAllVoters">
           Remove All Voters
         </button>
@@ -56,20 +53,7 @@
         </tbody>
       </table>
     </div>
-    <!-- Printable Voter Cards (Hidden by default, shown only in print) -->
-    <div id="printable-cards" class="print-only">
-      <div class="voter-cards-grid">
-        <div v-for="voter in printableVoters" :key="voter.id" class="voter-card">
-          <div class="card-title">SOAVS Voter Card</div>
-          <div class="card-detail"><strong>Name:</strong> {{ voter.name }}</div>
-          <div class="card-detail"><strong>Student ID:</strong> {{ voter.student_id }}</div>
-          <div class="card-detail token-detail"><strong>Token:</strong> {{ voter.unique_voting_token }}</div>
-          <div class="qr-container">
-            <img :src="`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(JSON.stringify({student_id: voter.student_id, token: voter.unique_voting_token}))}`" alt="QR Code" />
-          </div>
-        </div>
-      </div>
-    </div>
+
 
     <!-- Delete Single Voter Confirmation -->
     <ConfirmDialog
@@ -109,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import api from '../axios'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 
@@ -123,7 +107,6 @@ const voterToDelete = ref(null)
 const showClearAllDialog = ref(false)
 const showRevokeDialog = ref(false)
 const voterToRevoke = ref(null)
-const printableVoters = ref([])
 
 let refreshInterval = null
 
@@ -227,21 +210,7 @@ const confirmClearAll = async () => {
     setTimeout(() => { uploadMsg.value = ''; }, 5000)
 }
 
-const printCards = async () => {
-    // Fetch voter data with tokens from the dedicated print-cards endpoint
-    try {
-        const response = await api.get('voters/print-cards/')
-        printableVoters.value = response.data
-        // Allow Vue to render the print content, then trigger print
-        await nextTick()
-        window.print()
-    } catch (error) {
-        console.error('Error fetching print data:', error)
-        isUploadSuccess.value = false
-        uploadMsg.value = 'Failed to load voter cards for printing.'
-        setTimeout(() => { uploadMsg.value = ''; }, 5000)
-    }
-}
+
 
 onMounted(() => {
     fetchVoters()
@@ -253,66 +222,7 @@ onUnmounted(() => {
 })
 </script>
 
-<style>
-@media print {
-    body * {
-        visibility: hidden;
-    }
-    #printable-cards, #printable-cards * {
-        visibility: visible;
-    }
-    #printable-cards {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        display: block !important;
-    }
-    .voter-cards-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-    }
-    .voter-card {
-        border: 2px dashed #000;
-        padding: 20px;
-        page-break-inside: avoid;
-        font-family: monospace;
-        color: #000 !important;
-        background: #fff !important;
-    }
-    .card-title {
-        font-size: 18px;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 15px;
-        color: #000 !important;
-    }
-    .card-detail {
-        font-size: 14px;
-        margin-bottom: 8px;
-        color: #000 !important;
-    }
-    .token-detail {
-        font-size: 16px;
-        margin-top: 15px;
-        padding: 8px;
-        border: 1px solid #000;
-        text-align: center;
-        background: #f9f9f9 !important;
-    }
-    .qr-container {
-        margin-top: 20px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    .qr-container img {
-        width: 120px;
-        height: 120px;
-    }
-}
-</style>
+
 
 <style scoped>
 .print-only {
