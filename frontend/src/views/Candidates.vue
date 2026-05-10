@@ -74,7 +74,7 @@
           <div class="form-group">
             <label>Photo</label>
             <input type="file" @change="handleFileUpload" accept="image/*" class="input-glass" />
-            <p v-if="isEditing && candidate.photo" class="text-muted" style="font-size: 11px; margin-top: 5px;">
+            <p v-if="isEditing && selectedCandidate && selectedCandidate.photo" class="text-muted" style="font-size: 11px; margin-top: 5px;">
               Leave blank to keep existing photo.
             </p>
           </div>
