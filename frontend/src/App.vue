@@ -3,11 +3,15 @@ import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 
 const route = useRoute()
+
+const isFullPage = () => {
+  return route.name === 'Login' || route.name === 'Landing'
+}
 </script>
 
 <template>
-  <div id="app" :class="{ 'has-sidebar': route.name !== 'Login' }">
-    <AppSidebar v-if="route.name && route.name !== 'Login'" />
+  <div id="app" :class="{ 'has-sidebar': !isFullPage() }">
+    <AppSidebar v-if="route.name && !isFullPage()" />
     <main class="main-content">
       <router-view></router-view>
     </main>

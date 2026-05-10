@@ -4,7 +4,7 @@
       <h2>SOAVS</h2>
     </div>
     <nav class="nav-links">
-      <router-link to="/" class="nav-item">Dashboard</router-link>
+      <router-link to="/dashboard" class="nav-item">Dashboard</router-link>
       <router-link to="/elections" class="nav-item">Elections</router-link>
       <router-link to="/candidates" class="nav-item">Candidates</router-link>
       <router-link to="/voters" class="nav-item">Voters</router-link>
