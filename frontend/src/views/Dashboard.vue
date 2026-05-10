@@ -55,7 +55,7 @@
                   <span class="cand-votes">{{ cand.vote_count }} votes</span>
                 </div>
                 <div class="bar-bg">
-                  <div class="bar-fill" :style="{ width: calculateWidth(cand.vote_count, pos.candidates) }"></div>
+                  <div class="bar-fill" :style="{ width: calculateWidth(cand.vote_count) }"></div>
                 </div>
               </div>
               
@@ -176,10 +176,10 @@ const fetchResults = async () => {
   }
 };
 
-const calculateWidth = (votes, candidates) => {
-  if (candidates.length === 0) return '0%';
-  const maxVotes = Math.max(...candidates.map(c => c.vote_count), 1); // Avoid division by 0
-  return `${(votes / maxVotes) * 100}%`;
+const calculateWidth = (votes) => {
+  if (votes === 0) return '0%';
+  const total = stats.value.total_voters > 0 ? stats.value.total_voters : 1;
+  return `${(votes / total) * 100}%`;
 };
 
 onMounted(() => {

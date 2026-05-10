@@ -34,6 +34,13 @@ class VoterAdmin(admin.ModelAdmin):
     list_display = ['student_id', 'name', 'email', 'has_voted']
     list_filter = ['has_voted']
     search_fields = ['student_id', 'name', 'email']
+    actions = ['reset_has_voted']
+
+    @admin.action(description='Reset selected voters so they can vote again')
+    def reset_has_voted(self, request, queryset):
+        updated = queryset.update(has_voted=False)
+        self.message_user(request, f'Successfully reset {updated} voter(s).')
+
 
 
 @admin.register(VoteRecord)
