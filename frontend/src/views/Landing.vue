@@ -42,7 +42,7 @@
         </p>
         <div class="hero-actions anim-reveal" style="--delay: 0.45s">
           <a
-            href="https://expo.dev/accounts/aoie3/projects/student-vote/builds/193e84e3-8a0d-4db5-89bb-733893c73cac"
+            href="https://expo.dev/accounts/ledeux/projects/student-vote/builds/bca7474d-3049-4611-9d2e-8114e82aaab7"
             target="_blank"
             rel="noopener noreferrer"
             class="btn-download"
@@ -117,7 +117,7 @@
         <h2>Ready to vote?</h2>
         <p>Download the SOAVS mobile app and participate in your organization's elections today.</p>
         <a
-          href="https://expo.dev/accounts/aoie3/projects/student-vote/builds/193e84e3-8a0d-4db5-89bb-733893c73cac"
+          href="https://expo.dev/accounts/ledeux/projects/student-vote/builds/bca7474d-3049-4611-9d2e-8114e82aaab7"
           target="_blank"
           rel="noopener noreferrer"
           class="btn-download btn-download--lg"
