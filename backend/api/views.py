@@ -118,11 +118,12 @@ class VoterViewSet(viewsets.ModelViewSet):
                     'name': row['name'],
                     'email': row['email'],
                 }
-                # Support optional course and year columns
+                # Support optional course and year columns (accept both 'year' and 'year_level' headers)
                 if 'course' in row and row['course'].strip():
                     defaults['course'] = row['course'].strip()
-                if 'year' in row and row['year'].strip():
-                    defaults['year_level'] = row['year'].strip()
+                year_val = row.get('year', '') or row.get('year_level', '')
+                if year_val.strip():
+                    defaults['year_level'] = year_val.strip()
 
                 _, created = Voter.objects.update_or_create(
                     student_id=row['student_id'],
