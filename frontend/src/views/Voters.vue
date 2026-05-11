@@ -28,6 +28,8 @@
             <th>Student ID</th>
             <th>Name</th>
             <th>Email</th>
+            <th>Course</th>
+            <th>Year</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -37,6 +39,8 @@
             <td>{{ voter.student_id }}</td>
             <td>{{ voter.name }}</td>
             <td>{{ voter.email }}</td>
+            <td>{{ voter.course || '—' }}</td>
+            <td>{{ voter.year_level || '—' }}</td>
             <td>
               <span class="badge" :class="voter.has_voted ? 'badge-success' : 'badge-warning'">
                 {{ voter.has_voted ? 'Voted' : 'Pending' }}
@@ -48,7 +52,7 @@
             </td>
           </tr>
           <tr v-if="voters.length === 0">
-            <td colspan="5" class="text-center">No voters found. Upload a CSV to get started.</td>
+            <td colspan="7" class="text-center">No voters found. Upload a CSV to get started.</td>
           </tr>
         </tbody>
       </table>

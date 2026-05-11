@@ -31,8 +31,8 @@ class CandidateAdmin(admin.ModelAdmin):
 
 @admin.register(Voter)
 class VoterAdmin(admin.ModelAdmin):
-    list_display = ['student_id', 'name', 'email', 'has_voted']
-    list_filter = ['has_voted']
+    list_display = ['student_id', 'name', 'email', 'course', 'year_level', 'has_voted']
+    list_filter = ['has_voted', 'year_level', 'course']
     search_fields = ['student_id', 'name', 'email']
     actions = ['reset_has_voted']
 

@@ -1,4 +1,11 @@
 <template>
+  <!-- Hidden print-only header that shows at the top of the printed page -->
+  <div class="print-header">
+    <h1>SOAVS — Election Results Report</h1>
+    <p v-if="selectedElectionData">{{ selectedElectionData.election.title }}</p>
+    <p class="print-date">Generated on {{ new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</p>
+    <p v-if="selectedElectionData" class="print-status">Status: {{ selectedElectionData.election.calculated_status }}</p>
+  </div>
   <div class="dashboard-container animation-fade-in">
     <div class="header">
       <div class="title-action-wrapper">
@@ -38,9 +45,19 @@
               </option>
             </select>
           </div>
-          <span v-if="selectedElectionData" class="badge" :class="selectedElectionData.election.calculated_status.toLowerCase()">
-            {{ selectedElectionData.election.calculated_status }}
-          </span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button
+              v-if="selectedElectionData"
+              class="btn-print"
+              @click="handlePrintRequest"
+              title="Print election results"
+            >
+              <i class="fas fa-print"></i> Print Results
+            </button>
+            <span v-if="selectedElectionData" class="badge" :class="selectedElectionData.election.calculated_status.toLowerCase()">
+              {{ selectedElectionData.election.calculated_status }}
+            </span>
+          </div>
         </div>
         <div class="chart-content results-container">
           <p v-if="loadingResults" class="text-muted text-center" style="padding: 40px 0;">Loading results...</p>
@@ -49,13 +66,16 @@
             <div v-for="pos in selectedElectionData.positions" :key="pos.id" class="position-result-group">
               <h4 class="position-title">{{ pos.name }}</h4>
               
-              <div v-for="cand in pos.candidates" :key="cand.id" class="candidate-bar-row">
+              <div v-for="cand in pos.candidates" :key="cand.id" class="candidate-bar-row" :class="{ 'is-winner': isWinner(pos, cand) }">
                 <div class="candidate-info">
-                  <span class="cand-name">{{ cand.name }}</span>
+                  <span class="cand-name">
+                    <span v-if="isWinner(pos, cand)" class="winner-badge"><i class="fas fa-trophy"></i> Winner</span>
+                    {{ cand.name }}
+                  </span>
                   <span class="cand-votes">{{ cand.vote_count }} votes</span>
                 </div>
                 <div class="bar-bg">
-                  <div class="bar-fill" :style="{ width: calculateWidth(cand.vote_count) }"></div>
+                  <div class="bar-fill" :class="{ 'bar-fill-winner': isWinner(pos, cand) }" :style="{ width: calculateWidth(cand.vote_count) }"></div>
                 </div>
               </div>
               
@@ -97,12 +117,26 @@
         </ul>
       </div>
     </div>
+
+    <!-- Print Confirmation Dialog -->
+    <ConfirmDialog
+      :visible="showPrintConfirm"
+      title="Election Still Ongoing"
+      message="The election is still ongoing. Do you still want to continue?"
+      subtitle="The printed results may not be final."
+      confirmText="Yes, Print"
+      cancelText="Cancel"
+      variant="warning"
+      @confirm="executePrint"
+      @cancel="showPrintConfirm = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import axios from '../axios';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const stats = ref({
   active_elections: 0,
@@ -116,6 +150,7 @@ const publishedElections = ref([]);
 const selectedElectionId = ref("");
 const selectedElectionData = ref(null);
 const loadingResults = ref(false);
+const showPrintConfirm = ref(false);
 let refreshInterval = null;
 let resultsInterval = null;
 
@@ -180,6 +215,36 @@ const calculateWidth = (votes) => {
   if (votes === 0) return '0%';
   const total = stats.value.total_voters > 0 ? stats.value.total_voters : 1;
   return `${(votes / total) * 100}%`;
+};
+
+// --- Print Results Logic ---
+const isWinner = (position, candidate) => {
+  // Only highlight winners when the election is completed
+  if (!selectedElectionData.value) return false;
+  const status = selectedElectionData.value.election.calculated_status;
+  if (status !== 'COMPLETED') return false;
+
+  if (!position.candidates || position.candidates.length === 0) return false;
+  const maxVotes = Math.max(...position.candidates.map(c => c.vote_count));
+  if (maxVotes === 0) return false;
+  return candidate.vote_count === maxVotes;
+};
+
+const handlePrintRequest = () => {
+  if (!selectedElectionData.value) return;
+  const status = selectedElectionData.value.election.calculated_status;
+  if (status === 'ACTIVE' || status === 'UPCOMING') {
+    showPrintConfirm.value = true;
+  } else {
+    executePrint();
+  }
+};
+
+const executePrint = () => {
+  showPrintConfirm.value = false;
+  nextTick(() => {
+    window.print();
+  });
 };
 
 onMounted(() => {
@@ -454,5 +519,224 @@ onUnmounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Print Button */
+.btn-print {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.btn-print:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  transform: translateY(-1px);
+}
+
+/* Winner Highlight */
+.is-winner {
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 3px solid #f59e0b;
+  padding-left: 12px;
+  border-radius: 4px;
+}
+.winner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.winner-badge i {
+  font-size: 10px;
+}
+.bar-fill-winner {
+  background: linear-gradient(to right, #f59e0b, #fbbf24) !important;
+}
+
+/* Print-only header (hidden on screen) */
+.print-header {
+  display: none;
+}
+
+/* ===== Print Styles ===== */
+@media print {
+  /* Show the print header */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #000;
+  }
+  .print-header h1 {
+    font-size: 24px;
+    font-weight: 800;
+    color: #000 !important;
+    background: none !important;
+    -webkit-text-fill-color: #000 !important;
+    margin-bottom: 6px;
+  }
+  .print-header p {
+    color: #333 !important;
+    font-size: 12px;
+    margin: 2px 0;
+  }
+  .print-header .print-status {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  /* Reset page */
+  * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 12pt;
+  }
+
+  /* Hide ALL non-essential UI */
+  .sidebar,
+  .header,
+  .stats-grid,
+  .recent-activity-container,
+  .panel-header,
+  .btn-sync,
+  .btn-print,
+  .election-select,
+  .modal-overlay,
+  .badge {
+    display: none !important;
+  }
+
+  /* Hide the progress bars entirely */
+  .bar-bg {
+    display: none !important;
+  }
+
+  /* Reset layout — no sidebar margin */
+  .has-sidebar .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  .dashboard-container {
+    padding: 10px !important;
+  }
+  .main-content-grid {
+    display: block !important;
+  }
+
+  /* Strip glass panel styling */
+  .chart-container.glass-panel {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .results-container {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .positions-list {
+    gap: 0 !important;
+  }
+
+  /* Position groups — clean bordered sections */
+  .position-result-group {
+    background: none !important;
+    border: none !important;
+    border-bottom: 1px solid #999 !important;
+    border-radius: 0 !important;
+    padding: 12px 0 !important;
+    margin-bottom: 0 !important;
+    page-break-inside: avoid;
+  }
+  .position-title {
+    color: #000 !important;
+    font-size: 14pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px;
+    border-bottom: none !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 8px !important;
+  }
+
+  /* Candidate rows — simple text lines */
+  .candidate-bar-row {
+    margin-bottom: 4px !important;
+    padding: 4px 0 !important;
+    border-left: none !important;
+    background: none !important;
+    border-radius: 0 !important;
+    padding-left: 16px !important;
+  }
+  .candidate-info {
+    font-size: 12pt !important;
+    margin-bottom: 0 !important;
+  }
+  .cand-name {
+    color: #000 !important;
+    font-weight: 400 !important;
+    font-size: 12pt !important;
+  }
+  .cand-votes {
+    color: #000 !important;
+    font-size: 12pt !important;
+    font-weight: 600 !important;
+  }
+
+  /* Winner row — bold with clear label */
+  .is-winner {
+    background: none !important;
+    border-left: none !important;
+    padding-left: 16px !important;
+  }
+  .is-winner .cand-name {
+    font-weight: 700 !important;
+  }
+  .is-winner .cand-votes {
+    font-weight: 800 !important;
+  }
+  .winner-badge {
+    background: none !important;
+    color: #000 !important;
+    font-size: 10pt !important;
+    font-weight: 800 !important;
+    padding: 0 !important;
+    margin-right: 6px !important;
+    border-radius: 0 !important;
+    border: 1px solid #000 !important;
+    padding: 1px 6px !important;
+  }
+  .winner-badge i {
+    display: none !important;
+  }
 }
 </style>

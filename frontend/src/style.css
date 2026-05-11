@@ -127,3 +127,22 @@ select.input-glass option {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
 }
+
+/* ===== Global Print Styles ===== */
+@media print {
+  /* Hide the sidebar */
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Remove sidebar margin from main content */
+  .has-sidebar .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide modals */
+  .modal-overlay {
+    display: none !important;
+  }
+}

@@ -107,23 +107,36 @@ class VoterViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Assuming CSV with columns: student_id, name, email
+            # CSV columns: student_id, name, email, course (optional), year (optional)
             decoded_file = file_obj.read().decode('utf-8').splitlines()
             reader = csv.DictReader(decoded_file)
 
             created_count = 0
+            updated_count = 0
             for row in reader:
-                _, created = Voter.objects.get_or_create(
+                defaults = {
+                    'name': row['name'],
+                    'email': row['email'],
+                }
+                # Support optional course and year columns
+                if 'course' in row and row['course'].strip():
+                    defaults['course'] = row['course'].strip()
+                if 'year' in row and row['year'].strip():
+                    defaults['year_level'] = row['year'].strip()
+
+                _, created = Voter.objects.update_or_create(
                     student_id=row['student_id'],
-                    defaults={
-                        'name': row['name'],
-                        'email': row['email']
-                    }
+                    defaults=defaults
                 )
                 if created:
                     created_count += 1
+                else:
+                    updated_count += 1
 
-            return Response({'success': f'{created_count} voters imported successfully'}, status=status.HTTP_201_CREATED)
+            msg = f'{created_count} voter(s) imported'
+            if updated_count > 0:
+                msg += f', {updated_count} voter(s) updated'
+            return Response({'success': msg}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

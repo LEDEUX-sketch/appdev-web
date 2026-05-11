@@ -30,13 +30,13 @@ class VoterListSerializer(serializers.ModelSerializer):
     """Safe serializer for admin table views — excludes the sensitive voting token."""
     class Meta:
         model = Voter
-        fields = ['id', 'student_id', 'name', 'email', 'has_voted']
+        fields = ['id', 'student_id', 'name', 'email', 'course', 'year_level', 'has_voted']
 
 class VoterSerializer(serializers.ModelSerializer):
     """Full serializer with token — used only for voter login and print-cards endpoint."""
     class Meta:
         model = Voter
-        fields = ['id', 'student_id', 'name', 'email', 'has_voted', 'unique_voting_token']
+        fields = ['id', 'student_id', 'name', 'email', 'course', 'year_level', 'has_voted', 'unique_voting_token']
 
 class VoteRecordSerializer(serializers.ModelSerializer):
     class Meta:

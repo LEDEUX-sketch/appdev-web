@@ -70,6 +70,8 @@ class Voter(models.Model):
     student_id = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
     email = models.EmailField(unique=True)
+    course = models.CharField(max_length=150, blank=True, null=True)
+    year_level = models.CharField(max_length=20, blank=True, null=True)
     unique_voting_token = models.CharField(max_length=64, unique=True, blank=True)
     has_voted = models.BooleanField(default=False)
     is_active_session = models.BooleanField(default=False)
